@@ -42,34 +42,54 @@ with tab1:
     st.markdown("### 📝 面談メモから作成")
     notes = st.text_area("面談メモ", height=150, placeholder="中島さん、30代、Webデザイン経験あり...", key="note_input")
 
+    # ★ここに追加！手動か自動か選べるスイッチ
+    use_ai_matching = st.checkbox("✅ AIに案件を提案させる（チェックを外すとプロフィールとメールの型だけ作ります）", value=True)
+
     if st.button("🚀 作成する", type="primary"):
         if not notes:
             st.warning("面談メモを入力してください！")
             st.stop()
 
         status_area = st.empty()
-        status_area.info("📂 スプレッドシートを読み込み中...")
-
-        try:
-            worksheet = gc.open(sheet_name).sheet1
-            rows = worksheet.get_all_values()
-            if not rows:
-                st.error("❌ シートが空っぽです！")
+        
+        # 案件リストの取得（AI提案がオンのときだけ読み込む）
+        csv_text = ""
+        if use_ai_matching:
+            status_area.info("📂 スプレッドシートを読み込み中...")
+            try:
+                worksheet = gc.open(sheet_name).sheet1
+                rows = worksheet.get_all_values()
+                if rows:
+                    header = rows.pop(0)
+                    df = pd.DataFrame(rows, columns=header)
+                    csv_text = df.to_string(index=False)
+                    status_area.info(f"✅ 案件リスト取得成功: 全{len(df)}件。AIが生成中...")
+            except Exception as e:
+                st.error(f"❌ スプレッドシートが見つかりません: {sheet_name}")
                 st.stop()
-            
-            header = rows.pop(0)
-            df = pd.DataFrame(rows, columns=header)
-            csv_text = df.to_string(index=False)
-            status_area.info(f"✅ 案件リスト取得成功: 全{len(df)}件。AIが生成中...")
+        else:
+            status_area.info("📝 AI提案はOFFです。プロフィールとメールの型のみ作成します...")
 
-        except Exception as e:
-            st.error(f"❌ スプレッドシートが見つかりません: {sheet_name}")
-            st.stop()
+        # プロンプトの切り替えロジック
+        if use_ai_matching:
+            # 自動モードの指示
+            instruction_job = """
+            3. 【案件リストデータ】の中から、候補者に最も適した案件を1つ選び、メール内の [ここに案件情報を挿入] の部分に記載すること。
+            4. 案件情報のスタイル（■を使う形式）は完全に再現すること。
+            """
+            data_context = f"【案件リストデータ】\n{csv_text}"
+        else:
+            # 手動モードの指示
+            instruction_job = """
+            3. メール内の [ここに案件情報を挿入] の部分には、具体的な案件は入れず、「**（ここに手動で案件を貼り付けてください）**」というプレースホルダーの文字だけを残すこと。
+            4. 勝手に案件を捏造したり提案したりしないこと。
+            """
+            data_context = ""
 
-        # プロンプト（プロフィール＋メール）
+        # メインプロンプト
         prompt = f"""
         あなたはプロの人材エージェントのアシスタントです。
-        以下の【面談メモ】と【案件リスト】をもとに、以下の2つを出力してください。
+        以下の【面談メモ】をもとに、以下の2つを出力してください。
         
         1. **候補者プロフィール**（指定フォーマットで抽出）
         2. **候補者への提案メール**（指定フォーマットで作成）
@@ -77,13 +97,13 @@ with tab1:
         【面談メモ】
         {notes}
 
-        【案件リストデータ】
-        {csv_text}
+        {data_context}
 
         【重要ルール】
         1. 「内部メモ_送付NG」列の内容はメールには記載しないこと。
         2. プロフィール項目の情報がない場合は推測せず空欄または「？」とすること。
-        3. メール本文のテンプレート、および案件情報のスタイル（■を使う形式）は完全に再現すること。
+        {instruction_job}
+        5. メール本文のテンプレートは一言一句変えずに使うこと。
 
         【出力フォーマット】
         以下の点線で区切られた形式で出力してください。
@@ -112,30 +132,18 @@ with tab1:
 
         下記案件概要になります。もしよろしければ、是非お力添えいただけますと幸いです。
 
-        [ここに以下の「案件記載スタイル」で案件情報を挿入]
+        [ここに案件情報を挿入]
 
         引き続きどうぞよろしくお願いいたします。
         --------------------------------------------------
 
-        【案件記載スタイル】
+        【（参考）案件記載スタイル】
         [社名]：
         [案件タイトル]
 
         ■概要
-
-        [概要の内容を記載]
-
-        ■業務内容
-
-        [業務内容を箇条書きなどで記載]
-
-        ■稼働時間・条件
-
-        [稼働条件や時給などを記載]
-
-        ■求める人物像
-
-        [求める人物像を記載]
+        [概要の内容]
+        ...
         """
 
         try:
@@ -147,7 +155,7 @@ with tab1:
             st.error(f"AI生成エラー: {e}")
 
 # ==========================================
-# タブ2：新しい案件登録機能
+# タブ2：案件登録機能（変更なし）
 # ==========================================
 with tab2:
     st.markdown("### ➕ テキストから案件を自動登録")
@@ -177,7 +185,6 @@ with tab2:
         1. 必ず純粋なJSON形式のみを出力すること（Markdown記法は不要）。
         2. 情報がない項目は空文字 "" にすること。
         3. 「👇ここから下はいくらない」などの記述があれば、それ以降の内容はすべて「内部メモ_送付NG」に入れること。
-
         """
 
         try:
@@ -195,7 +202,6 @@ with tab2:
             worksheet = gc.open(sheet_name).sheet1
             
             # データの並び順をシートに合わせる
-            # 列順：社名, 案件タイトル, 概要, 業務内容, 稼働条件, 求める人物像, 内部メモ_送付NG
             row_to_add = [
                 job_data.get("社名", ""),
                 job_data.get("案件タイトル", ""),
