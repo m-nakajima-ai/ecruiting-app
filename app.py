@@ -37,7 +37,7 @@ except Exception as e:
 
 # --- 2. 画面構成 ---
 st.markdown("### 面談メモ入力")
-notes = st.text_area("ここにメモを貼り付けてください", height=150, placeholder="永長さん、32歳、Javaが得意...")
+notes = st.text_area("ここにメモを貼り付けてください", height=150, placeholder="中島さん、23歳、Javaが得意...")
 
 if st.button("🚀 AIを実行する", type="primary"):
     if not notes:
