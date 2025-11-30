@@ -14,12 +14,12 @@ st.title("🚀 人材エージェントAI Pro")
 # --- サイドバー設定 ---
 st.sidebar.header("設定")
 sheet_name = st.sidebar.text_input("スプレッドシート名", value="案件管理DB")
-candidate_sheet_name = "人材DB" # 保存先のシート名
+candidate_sheet_name = "人材DB" 
 
-# --- 1. 認証と準備 ---
+# --- 認証と準備 ---
 try:
     if "GEMINI_API_KEY" not in st.secrets or "GCP_JSON_KEY" not in st.secrets:
-        st.error("⚠️ Secrets（設定）がまだ完了していません。")
+        st.error("⚠️ Secrets未設定")
         st.stop()
 
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -29,17 +29,15 @@ try:
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(service_account_info, scopes=scopes)
     gc = gspread.authorize(creds)
-
 except Exception as e:
-    st.error(f"認証エラーが発生しました: {e}")
+    st.error(f"認証エラー: {e}")
     st.stop()
 
-# --- 画面構成（タブ分け） ---
-# ★ここが重要！タブを作る命令です
+# --- タブ構成 ---
 tab1, tab2 = st.tabs(["📝 CA業務 (登録・メール作成)", "🤝 RA業務 (商談・提案)"])
 
 # ==========================================
-# 【タブ1】CA向け：面談メモ/PDF → メール作成 & DB登録
+# 【タブ1】CA向け：あのフォーマット復活版
 # ==========================================
 with tab1:
     st.header("新規人材の登録 & 提案メール作成")
@@ -48,29 +46,26 @@ with tab1:
     with col1:
         uploaded_file = st.file_uploader("職務経歴書 (PDF) をアップロード", type="pdf")
     with col2:
-        notes = st.text_area("面談メモ (補足情報)", height=150, placeholder="人柄、話し方、PDFにない希望条件など...")
+        notes = st.text_area("面談メモ", height=150, placeholder="永長さん、32歳、Javaが得意...")
 
     if st.button("🚀 AIを実行＆DB登録", type="primary"):
         if not notes and not uploaded_file:
-            st.warning("メモかPDF、どちらかは入力してください！")
+            st.warning("メモかPDFを入力してください")
             st.stop()
 
         status_area = st.empty()
         status_area.info("📂 情報を解析中...")
 
-        # --- A. PDFのテキスト抽出 ---
+        # PDF解析
         resume_text = ""
         if uploaded_file:
             try:
                 reader = PyPDF2.PdfReader(uploaded_file)
                 for page in reader.pages:
                     resume_text += page.extract_text()
-                status_area.info("✅ PDF読み込み完了。案件リストとマッチング中...")
-            except Exception as e:
-                st.error(f"PDF読み込みエラー: {e}")
-                st.stop()
+            except: pass
 
-        # --- B. 案件リスト(Job List)の取得 ---
+        # 案件リスト取得
         try:
             worksheet = gc.open(sheet_name).sheet1 
             rows = worksheet.get_all_values()
@@ -78,36 +73,54 @@ with tab1:
             df = pd.DataFrame(rows, columns=header)
             job_list_text = df.to_string(index=False)
         except Exception as e:
-            st.error(f"案件リスト読み込みエラー: {e}")
+            st.error(f"案件リストエラー: {e}")
             st.stop()
 
-        # --- C. プロンプト作成 ---
+        # --- プロンプト（フォーマット指定を復活）---
         prompt = f"""
         あなたは優秀な人材エージェントです。
-        以下の【入力情報】と【保有案件リスト】をもとに、
-        1. データベース登録用のJSONデータ
-        2. 企業への提案メール文面
-        を作成してください。
+        以下の情報をもとに、指定のJSON形式で出力してください。
+        メール本文や登録データには、以下の【出力フォーマット】の構成を必ず含めてください。
 
         【入力情報】
         面談メモ: {notes}
-        職務経歴書(PDF内容): {resume_text}
-
-        【保有案件リスト】
-        {job_list_text}
+        職務経歴書: {resume_text}
+        保有案件リスト: {job_list_text}
 
         【出力形式】
-        必ず以下のJSON形式のみを出力してください（Markdownの ```json は不要）。
+        必ず以下のJSON形式のみを出力してください（Markdown不要）。
         {{
+            "display_text": "ここに【以前のフォーマット通りのテキスト】を入れる。\\n-------------------\\n【新規/既存】...から始まり、メール本文まで全て含めること。",
             "db_data": {{
-                "name": "氏名（不明なら「？」）",
-                "age": "年齢（不明なら「？」）",
-                "skills": "主要スキル・職種",
-                "pr_summary": "経歴と強みの要約（100文字程度）",
-                "conditions": "希望条件（金額や稼働率など）"
-            }},
-            "email_content": "ここにメール本文全体を入れる。\\n挨拶文、選定した案件（案件名・選定理由）、締めを含めること。"
+                "name": "氏名",
+                "age": "年齢",
+                "skills": "スキル",
+                "pr_summary": "PR要約",
+                "conditions": "希望条件"
+            }}
         }}
+
+        【以前のフォーマット構成（display_textの中身）】
+        --------------------------------------------------
+        【新規/既存】[新規か既存か判定]
+        氏名：[氏名]
+        年齢：[年齢]
+        時給：[時給]
+        対応可能職種：[職種]
+        稼動可能時間：[時間]
+        対面稼動可否：[可否]
+        在住：[在住地]
+        PR文：[PR文を要約]
+        --------------------------------------------------
+
+        --------------------------------------------------
+        [氏名] 様
+
+        お世話になっております。プロの副業の中島です。
+        （中略：以前と同じテンプレート）
+        下記案件概要になります。
+        [ここに推奨案件を挿入]
+        --------------------------------------------------
         """
 
         try:
@@ -115,7 +128,7 @@ with tab1:
             cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
             result_json = json.loads(cleaned_text)
 
-            # --- D. DBへの保存 ---
+            # --- DB保存 ---
             try:
                 db_sheet = gc.open(sheet_name).worksheet(candidate_sheet_name)
                 new_row = [
@@ -127,69 +140,41 @@ with tab1:
                     result_json["db_data"]["conditions"]
                 ]
                 db_sheet.append_row(new_row)
-                status_area.success(f"✅ {result_json['db_data']['name']} さんを「{candidate_sheet_name}」に保存しました！")
-            except Exception as e:
-                status_area.warning(f"⚠️ DB保存に失敗しましたが、メールは生成しました: {e}")
+                status_area.success(f"✅ {result_json['db_data']['name']} さんをDB保存しました")
+            except:
+                status_area.warning("⚠️ DB保存失敗（でもテキスト生成は完了）")
 
-            # --- E. メール表示 ---
-            st.subheader("📩 生成されたメール文面")
-            st.text_area("コピー用", value=result_json["email_content"], height=400)
-            
-            with st.expander("登録されたデータを確認"):
-                st.json(result_json["db_data"])
+            # --- ★ここが復活ポイント！テキストエリアに以前の形式で表示 ---
+            st.subheader("出力結果")
+            st.text_area("チャット共有・メール送信用", value=result_json["display_text"], height=600)
 
         except Exception as e:
-            st.error(f"AI生成エラー: {e}")
+            st.error(f"AIエラー: {e}")
 
 # ==========================================
 # 【タブ2】RA向け：商談メモからリアルタイム検索
 # ==========================================
 with tab2:
     st.header("商談中のリアルタイム人材提案")
-    sales_notes = st.text_area("商談メモ (企業の課題・欲しい人物像)", height=100, 
-                             placeholder="例：急募。PM経験があり、PHPの開発も見れるプレイングマネージャー。予算80万くらい。")
+    sales_notes = st.text_area("商談メモ", height=100)
     
     if st.button("🔍 人材DBから検索", type="primary"):
         status_search = st.empty()
-        status_search.info("📂 人材DBを検索中...")
+        status_search.info("検索中...")
 
-        # --- A. 人材DB読み込み ---
         try:
             c_sheet = gc.open(sheet_name).worksheet(candidate_sheet_name)
             c_rows = c_sheet.get_all_values()
-            if len(c_rows) < 2:
-                st.error("人材DBにデータがありません。CAタブから登録してください。")
-                st.stop()
-                
             c_df = pd.DataFrame(c_rows[1:], columns=c_rows[0])
             candidates_text = c_df.to_string(index=False)
-        except Exception as e:
-            st.error(f"人材DB読み込みエラー: {e}")
-            st.stop()
-
-        # --- B. 検索プロンプト ---
-        search_prompt = f"""
-        あなたはマッチングのプロです。
-        【商談メモ】のニーズに最も合致する人材を、【人材DB】から最大3名選び出してください。
-        
-        【商談メモ】
-        {sales_notes}
-        
-        【人材DB】
-        {candidates_text}
-        
-        【出力形式】
-        各候補者について、以下のフォーマットで出力してください。
-        
-        ### 1. [氏名] ([年齢])
-        - **一致ポイント**: なぜこの企業に合うのか
-        - **懸念点**: もしあれば
-        - **紹介トーク**: 「〇〇様は〜の経験があり、御社の△△という課題に即戦力です」
-        """
-        
-        try:
+            
+            search_prompt = f"""
+            商談メモに基づき、人材DBから最適な3名を選んで提案してください。
+            【商談メモ】{sales_notes}
+            【人材DB】{candidates_text}
+            """
             proposal = model.generate_content(search_prompt)
-            status_search.success("✨ 提案候補が見つかりました")
+            status_search.success("完了")
             st.markdown(proposal.text)
         except Exception as e:
             st.error(f"検索エラー: {e}")
