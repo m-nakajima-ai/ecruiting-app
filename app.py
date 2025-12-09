@@ -23,7 +23,9 @@ try:
         st.stop()
 
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
- model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    
+    # ★ここを安定版の「1.5 Flash」に変更しました
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
     service_account_info = json.loads(st.secrets["GCP_JSON_KEY"])
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -37,7 +39,7 @@ except Exception as e:
 tab1, tab2 = st.tabs(["📝 CA業務 (登録・メール作成)", "🤝 RA業務 (商談・提案)"])
 
 # ==========================================
-# 【タブ1】CA向け：あのフォーマット復活版
+# 【タブ1】CA向け：フォーマット指定版
 # ==========================================
 with tab1:
     st.header("新規人材の登録 & 提案メール作成")
@@ -76,7 +78,7 @@ with tab1:
             st.error(f"案件リストエラー: {e}")
             st.stop()
 
-        # --- プロンプト（フォーマット指定を復活）---
+        # --- プロンプト（フォーマット指定）---
         prompt = f"""
         あなたは優秀な人材エージェントです。
         以下の情報をもとに、指定のJSON形式で出力してください。
@@ -144,7 +146,7 @@ with tab1:
             except:
                 status_area.warning("⚠️ DB保存失敗（でもテキスト生成は完了）")
 
-            # --- ★ここが復活ポイント！テキストエリアに以前の形式で表示 ---
+            # --- 表示 ---
             st.subheader("出力結果")
             st.text_area("チャット共有・メール送信用", value=result_json["display_text"], height=600)
 
@@ -165,16 +167,4 @@ with tab2:
         try:
             c_sheet = gc.open(sheet_name).worksheet(candidate_sheet_name)
             c_rows = c_sheet.get_all_values()
-            c_df = pd.DataFrame(c_rows[1:], columns=c_rows[0])
-            candidates_text = c_df.to_string(index=False)
-            
-            search_prompt = f"""
-            商談メモに基づき、人材DBから最適な3名を選んで提案してください。
-            【商談メモ】{sales_notes}
-            【人材DB】{candidates_text}
-            """
-            proposal = model.generate_content(search_prompt)
-            status_search.success("完了")
-            st.markdown(proposal.text)
-        except Exception as e:
-            st.error(f"検索エラー: {e}")
+            c_df = pd.DataFrame(c_rows[1:], columns=c
