@@ -6,6 +6,7 @@ import json
 import pandas as pd
 from datetime import datetime
 import PyPDF2
+import time
 
 # ページ設定
 st.set_page_config(page_title="人材エージェントAI Pro", page_icon="🚀", layout="wide")
@@ -24,8 +25,8 @@ try:
 
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     
-    # ★ここを一番安定して動く「gemini-pro」に変更しました（これで404は出ません）
-    model = genai.GenerativeModel('gemini-pro')
+    # ★ここが重要：最新の辞書で動く安定版モデル
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
     service_account_info = json.loads(st.secrets["GCP_JSON_KEY"])
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -71,14 +72,17 @@ with tab1:
         try:
             worksheet = gc.open(sheet_name).sheet1 
             rows = worksheet.get_all_values()
-            header = rows.pop(0)
-            df = pd.DataFrame(rows, columns=header)
-            job_list_text = df.to_string(index=False)
+            if len(rows) > 0:
+                header = rows.pop(0)
+                df = pd.DataFrame(rows, columns=header)
+                job_list_text = df.to_string(index=False)
+            else:
+                job_list_text = "案件なし"
         except Exception as e:
             st.error(f"案件リストエラー: {e}")
             st.stop()
 
-        # --- プロンプト（フォーマット指定）---
+        # --- プロンプト ---
         prompt = f"""
         あなたは優秀な人材エージェントです。
         以下の情報をもとに、指定のJSON形式で出力してください。
@@ -167,16 +171,19 @@ with tab2:
         try:
             c_sheet = gc.open(sheet_name).worksheet(candidate_sheet_name)
             c_rows = c_sheet.get_all_values()
-            c_df = pd.DataFrame(c_rows[1:], columns=c_rows[0])
-            candidates_text = c_df.to_string(index=False)
-            
-            search_prompt = f"""
-            商談メモに基づき、人材DBから最適な3名を選んで提案してください。
-            【商談メモ】{sales_notes}
-            【人材DB】{candidates_text}
-            """
-            proposal = model.generate_content(search_prompt)
-            status_search.success("完了")
-            st.markdown(proposal.text)
+            if len(c_rows) > 1:
+                c_df = pd.DataFrame(c_rows[1:], columns=c_rows[0])
+                candidates_text = c_df.to_string(index=False)
+                
+                search_prompt = f"""
+                商談メモに基づき、人材DBから最適な3名を選んで提案してください。
+                【商談メモ】{sales_notes}
+                【人材DB】{candidates_text}
+                """
+                proposal = model.generate_content(search_prompt)
+                status_search.success("完了")
+                st.markdown(proposal.text)
+            else:
+                st.warning("人材DBにデータがありません")
         except Exception as e:
             st.error(f"検索エラー: {e}")
