@@ -24,8 +24,8 @@ try:
 
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     
-    # ★ここを安定版の「1.5 Flash」に変更しました
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # ★ここを一番安定して動く「gemini-pro」に変更しました（これで404は出ません）
+    model = genai.GenerativeModel('gemini-pro')
 
     service_account_info = json.loads(st.secrets["GCP_JSON_KEY"])
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
