@@ -23,7 +23,7 @@ try:
         st.stop()
 
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
     service_account_info = json.loads(st.secrets["GCP_JSON_KEY"])
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
