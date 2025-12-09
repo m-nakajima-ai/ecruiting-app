@@ -5,7 +5,7 @@ from google.oauth2.service_account import Credentials
 import json
 import pandas as pd
 from datetime import datetime
-import PyPDF2
+import pypdf  # ★ここを修正しました！
 import time
 
 # ページ設定
@@ -25,7 +25,7 @@ try:
 
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     
-    # ★ここが重要：最新の辞書で動く安定版モデル
+    # モデル設定（最新の辞書ならこれで動きます）
     model = genai.GenerativeModel('gemini-1.5-flash')
 
     service_account_info = json.loads(st.secrets["GCP_JSON_KEY"])
@@ -59,11 +59,11 @@ with tab1:
         status_area = st.empty()
         status_area.info("📂 情報を解析中...")
 
-        # PDF解析
+        # PDF解析（★ここも pypdf に修正しました）
         resume_text = ""
         if uploaded_file:
             try:
-                reader = PyPDF2.PdfReader(uploaded_file)
+                reader = pypdf.PdfReader(uploaded_file)
                 for page in reader.pages:
                     resume_text += page.extract_text()
             except: pass
