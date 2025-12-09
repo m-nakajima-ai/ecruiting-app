@@ -167,4 +167,16 @@ with tab2:
         try:
             c_sheet = gc.open(sheet_name).worksheet(candidate_sheet_name)
             c_rows = c_sheet.get_all_values()
-            c_df = pd.DataFrame(c_rows[1:], columns=c
+            c_df = pd.DataFrame(c_rows[1:], columns=c_rows[0])
+            candidates_text = c_df.to_string(index=False)
+            
+            search_prompt = f"""
+            商談メモに基づき、人材DBから最適な3名を選んで提案してください。
+            【商談メモ】{sales_notes}
+            【人材DB】{candidates_text}
+            """
+            proposal = model.generate_content(search_prompt)
+            status_search.success("完了")
+            st.markdown(proposal.text)
+        except Exception as e:
+            st.error(f"検索エラー: {e}")
